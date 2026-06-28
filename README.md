@@ -3,9 +3,6 @@
 클로드 코드와 함께하는 바이브코딩 실습 가이드입니다.
 강의를 따라가며 아래 프롬프트와 명령어를 그대로 복사해서 실습하세요.
 
-> 강사: 조태호 ([@taehojo](https://github.com/taehojo))
-> 책 실습 자료: [taehojo/vibecoding](https://github.com/taehojo/vibecoding)
-
 <br/>
 
 ## 빠른 시작
@@ -396,9 +393,4 @@ npx vibeindex add vibeindex/skills --skill Vibeindex
 ## 참고 자료
 
 - [Vibe Index](https://www.vibeindex.ai) 스킬, MCP, 플러그인, 마켓플레이스 디렉토리
-- [taehojo/vibecoding](https://github.com/taehojo/vibecoding) 책 "혼자 공부하는 바이브코딩" 공식 GitHub
 - [클로드 코드 공식 문서](https://docs.claude.com/en/docs/claude-code)
-
-<br/>
-
-<p align="center"><sub>한빛앤 바이브코딩 강좌 · 강사 조태호</sub></p>
