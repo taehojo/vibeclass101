@@ -367,6 +367,12 @@ claude mcp add --transport http notion https://mcp.notion.com/mcp
 npx vibeindex add vibeindex/skills --skill Vibeindex
 ```
 
+**실습 프롬프트**
+
+```
+노션에 내일 서울 날씨를 기록하고, 추천하는 복장을 적어줘.
+```
+
 ### 03. 플러그인, 마켓플레이스 활용
 
 1. [Vibe Index](https://www.vibeindex.ai) > 마켓플레이스 메뉴 > `anthropics-skills` 선택
