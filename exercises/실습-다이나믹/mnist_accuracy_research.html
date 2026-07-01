@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>MNIST 정확도 향상 기법 조사 보고서</title>
+<style>
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+    line-height: 1.7;
+    color: #222;
+    background: #fafafa;
+    max-width: 960px;
+    margin: 40px auto;
+    padding: 32px 40px;
+    background-color: #ffffff;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+    border-radius: 8px;
+  }
+  h1 {
+    color: #1a365d;
+    border-bottom: 3px solid #2c5282;
+    padding-bottom: 12px;
+    margin-bottom: 8px;
+    font-size: 28px;
+  }
+  h2 {
+    color: #2c5282;
+    border-left: 5px solid #2c5282;
+    padding-left: 12px;
+    margin-top: 36px;
+    font-size: 22px;
+  }
+  h3 {
+    color: #2d3748;
+    margin-top: 24px;
+    font-size: 18px;
+  }
+  .summary-box {
+    background: #ebf8ff;
+    border: 1px solid #bee3f8;
+    border-radius: 6px;
+    padding: 16px 20px;
+    margin: 20px 0 28px 0;
+  }
+  .summary-box h3 {
+    margin-top: 0;
+    color: #2b6cb0;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 16px 0 24px 0;
+    font-size: 14.5px;
+  }
+  th, td {
+    border: 1px solid #cbd5e0;
+    padding: 9px 12px;
+    text-align: left;
+    vertical-align: top;
+  }
+  th {
+    background: #edf2f7;
+    color: #2d3748;
+    font-weight: 600;
+  }
+  tr:nth-child(even) td {
+    background: #f7fafc;
+  }
+  code {
+    background: #edf2f7;
+    color: #c53030;
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-family: Consolas, "SFMono-Regular", Menlo, monospace;
+    font-size: 13.5px;
+  }
+  .citation {
+    color: #2b6cb0;
+    font-weight: 600;
+    text-decoration: none;
+    font-size: 13px;
+    vertical-align: super;
+  }
+  .citation:hover {
+    text-decoration: underline;
+  }
+  .accuracy-tag {
+    display: inline-block;
+    background: #c6f6d5;
+    color: #22543d;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-weight: 600;
+    font-size: 13px;
+    margin-left: 4px;
+  }
+  .difficulty {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 12.5px;
+    font-weight: 600;
+  }
+  .diff-low { background: #c6f6d5; color: #22543d; }
+  .diff-mid { background: #fefcbf; color: #744210; }
+  .diff-high { background: #fed7d7; color: #742a2a; }
+  ul, ol {
+    padding-left: 22px;
+  }
+  li {
+    margin-bottom: 6px;
+  }
+  blockquote {
+    border-left: 4px solid #a0aec0;
+    background: #f7fafc;
+    margin: 16px 0;
+    padding: 10px 16px;
+    color: #4a5568;
+    font-style: italic;
+  }
+  .sources {
+    background: #f7fafc;
+    border-top: 2px solid #cbd5e0;
+    padding: 16px 8px;
+    font-size: 13.5px;
+    margin-top: 36px;
+  }
+  .sources ol li {
+    word-break: break-all;
+    margin-bottom: 8px;
+  }
+  .sources a {
+    color: #2b6cb0;
+    text-decoration: none;
+  }
+  .sources a:hover {
+    text-decoration: underline;
+  }
+  .meta {
+    color: #718096;
+    font-size: 13px;
+    margin-top: 0;
+    margin-bottom: 24px;
+  }
+  .caveat {
+    background: #fff5f5;
+    border: 1px solid #feb2b2;
+    border-radius: 6px;
+    padding: 12px 16px;
+    margin: 16px 0;
+    font-size: 14px;
+    color: #742a2a;
+  }
+  .recipe {
+    background: #f0fff4;
+    border: 1px solid #9ae6b4;
+    border-radius: 6px;
+    padding: 14px 18px;
+    margin: 16px 0;
+  }
+  .recipe h3 {
+    margin-top: 0;
+    color: #22543d;
+  }
+</style>
+</head>
+<body>
+
+<h1>MNIST 손글씨 숫자 인식 정확도 향상 기법 조사 보고서</h1>
+<p class="meta">작성일: 2026-06-29 · 대상 베이스라인: PyTorch Conv-Conv-Pool-FC-FC (~99%) · 목표: 99.5% 이상, 가능하면 99.8%+ (SOTA 영역)</p>
+
+<div class="summary-box">
+<h3>요약 (Executive Summary)</h3>
+<p>
+MNIST는 이미 포화된 벤치마크로, <strong>현재 공개된 최고 정확도는 약 99.87~99.91%</strong> 수준이며 (단일 모델 99.83%, 앙상블 99.87~99.91%) <span class="citation">[1][2][5][6]</span> 0.1% 오류율을 깬 결과(MNIST-NET10, 99.9%)도 보고되어 있습니다. <span class="citation">[3][4]</span>
+사용자의 ~99% 베이스라인에서 <strong>99.5%+로 올리는 가장 비용 효율적인 경로는 (1) affine + elastic distortion 기반 데이터 증강, (2) Batch Normalization + Dropout, (3) cosine annealing 학습률 스케줄</strong>이며, 이것만으로도 단일 CNN이 99.6~99.8% 범위에 진입합니다. <span class="citation">[10][11][14][16]</span>
+<strong>99.8%+ SOTA 영역에 진입하려면 다중 모델 앙상블(majority voting, STV) 또는 Homogeneous Vector Capsule / Max-Min CapsNet 같은 캡슐 변형 아키텍처와 TTA를 결합</strong>해야 하며, 이 단계의 한계 이득은 +0.03~0.1%p 수준으로 급격히 줄어듭니다. <span class="citation">[1][5][7][8][12][15][17]</span>
+ViT 등 트랜스포머 계열은 MNIST 같은 작은 데이터셋에서 강력한 사전학습 없이는 CNN을 넘기 어려우므로, 본 보고서에서는 <strong>CNN/Capsule 계열 + 강한 정규화 + 앙상블</strong>을 권장합니다.
+</p>
+</div>
+
+<h2>1. 현재 MNIST SOTA 상황</h2>
+
+<p>MNIST는 사람의 오류율(약 0.2%)에 이미 도달했으며, 0.1~0.2% 오류율 부근에서 모델 차이는 사실상 통계적 잡음과 구분이 어렵습니다. <span class="citation">[11]</span></p>
+
+<table>
+<thead>
+<tr>
+  <th>모델 / 기법</th>
+  <th>정확도 (오류율)</th>
+  <th>핵심 아이디어</th>
+  <th>출처</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td><strong>MNIST-NET10</strong> (Tabik 외, 2020)</td>
+  <td><span class="accuracy-tag">99.90%</span> (오류 10/10,000)</td>
+  <td>확신도(degree-of-certainty) 기반 이종 딥넷 융합</td>
+  <td>[3][4]</td>
+</tr>
+<tr>
+  <td><strong>2-layer 이종 앙상블</strong> (An 외, 2020)</td>
+  <td><span class="accuracy-tag">99.91%</span></td>
+  <td>3x3 / 5x5 / 7x7 커널 단순 CNN 세 동종 앙상블의 이종 결합</td>
+  <td>[1]</td>
+</tr>
+<tr>
+  <td>3-모델 majority voting (An 외, 2020)</td>
+  <td><span class="accuracy-tag">99.87%</span></td>
+  <td>커널 크기만 다른 3개 단순 CNN의 다수결</td>
+  <td>[2]</td>
+</tr>
+<tr>
+  <td><strong>Branching/Merging CNN + HVC 앙상블</strong> (Byerly 외, 2020)</td>
+  <td><span class="accuracy-tag">99.87%</span></td>
+  <td>Homogeneous Vector Capsule, no routing</td>
+  <td>[5][12]</td>
+</tr>
+<tr>
+  <td>Branching/Merging CNN + HVC 단일</td>
+  <td><span class="accuracy-tag">99.83%</span></td>
+  <td>단일 모델 SOTA</td>
+  <td>[6][12]</td>
+</tr>
+<tr>
+  <td>3-모델 Max-Min CapsNet 앙상블</td>
+  <td><span class="accuracy-tag">99.83%</span> (오류 0.17%)</td>
+  <td>Max-Min 정규화 캡슐 + majority vote</td>
+  <td>[8]</td>
+</tr>
+<tr>
+  <td>단일 Max-Min CapsNet</td>
+  <td><span class="accuracy-tag">99.80%</span> (오류 0.20%)</td>
+  <td>routing 정규화 개선</td>
+  <td>[7]</td>
+</tr>
+<tr>
+  <td>MCDNN (Cireşan 외, 2012)</td>
+  <td><span class="accuracy-tag">99.77%</span> (오류 0.23%)</td>
+  <td>35-컬럼 multi-column DNN + epoch마다 distortion</td>
+  <td>[11][13]</td>
+</tr>
+</tbody>
+</table>
+
+<h2>2. 데이터 증강 (Data Augmentation)</h2>
+
+<p>"MNIST에서 표준적인 input distortion을 적용하면 오류율이 더 줄어든다"는 것은 textbook 수준의 합의입니다. <span class="citation">[9]</span> 핵심 증강은 <strong>affine 변환 + elastic deformation</strong>이며, 이 두 가지가 MCDNN을 99.77%까지 끌어올린 핵심 동력이었습니다. <span class="citation">[11][13]</span></p>
+
+<h3>2.1 사용자에게 권장되는 증강 (강한 효과 → 약한 효과 순)</h3>
+<table>
+<thead>
+<tr><th>기법</th><th>대략적 이득</th><th>구현 난이도</th><th>비고</th></tr>
+</thead>
+<tbody>
+<tr>
+  <td><strong>Affine (회전 ±10~15°, 이동 ±2px, 스케일 ±10%, shear)</strong></td>
+  <td>+0.3 ~ +0.6%p</td>
+  <td><span class="difficulty diff-low">낮음</span></td>
+  <td><code>torchvision.transforms.RandomAffine</code> 한 줄. 단독으로도 99.6%+ 가능 <span class="citation">[14]</span></td>
+</tr>
+<tr>
+  <td><strong>Elastic distortion</strong> (Simard 2003)</td>
+  <td>+0.2 ~ +0.4%p (affine 위에 추가)</td>
+  <td><span class="difficulty diff-mid">중간</span></td>
+  <td>MCDNN, MNIST-NET10 등 SOTA 모델이 공통적으로 사용. <code>torchvision.transforms.ElasticTransform</code> 또는 albumentations <span class="citation">[11][13]</span></td>
+</tr>
+<tr>
+  <td><strong>매 epoch마다 새 distortion 샘플링</strong></td>
+  <td>고정 증강 대비 추가 이득</td>
+  <td><span class="difficulty diff-low">낮음</span></td>
+  <td>DataLoader가 자동으로 처리. MCDNN의 핵심 디테일 <span class="citation">[13]</span></td>
+</tr>
+<tr>
+  <td>RandAugment / AutoAugment</td>
+  <td>+0.05 ~ +0.15%p (한계 이득)</td>
+  <td><span class="difficulty diff-low">낮음</span></td>
+  <td>이미 affine+elastic이 있으면 추가 이득 작음. ImageNet 수준에서는 강력</td>
+</tr>
+<tr>
+  <td>Mixup / Cutout / CutMix</td>
+  <td>+0.0 ~ +0.1%p</td>
+  <td><span class="difficulty diff-low">낮음</span></td>
+  <td>MNIST에서는 효과 미미. Cutout은 오히려 작은 28x28 이미지에서 부정적일 수 있음</td>
+</tr>
+</tbody>
+</table>
+
+<div class="caveat">
+<strong>주의:</strong> MNIST는 좌우 반전이 의미적으로 다른 숫자가 되므로 <code>RandomHorizontalFlip</code>은 사용하지 마세요 (3 ↔ E 등). 회전도 ±15°를 크게 초과하면 6↔9 혼동을 유발합니다.
+</div>
+
+<h2>3. 모델 아키텍처 개선</h2>
+
+<h3>3.1 무엇이 효과적인가</h3>
+<ul>
+  <li><strong>커널 다양화 + Batch Normalization 기반 단순 CNN</strong>: An 외(2020)는 BN+ReLU만 들어간 단순 CNN 3개(커널 3/5/7)로 99.87%를 달성했으며, 이는 ResNet 같은 깊은 구조 없이도 SOTA에 도달함을 보여줍니다. <span class="citation">[1][2]</span></li>
+  <li><strong>Branching/Merging + Homogeneous Vector Capsules</strong>: routing 없는 캡슐 + 멀티 분류 분기 헤드 구조로 단일 모델 99.83%, 앙상블 99.87%. <span class="citation">[5][6][12]</span></li>
+  <li><strong>Max-Min CapsNet</strong>: 캡슐 routing 활성치를 Max-Min 정규화로 안정화하여 단일 99.80%, 3-모델 앙상블 99.83%. <span class="citation">[7][8]</span></li>
+  <li><strong>Multi-column DNN (역사적 SOTA)</strong>: 35개의 GPU 트레이닝된 컬럼을 averaging하여 99.77% 달성, 인간 오류율(0.2%)에 도달한 최초 사례. <span class="citation">[11]</span></li>
+</ul>
+
+<h3>3.2 효과가 제한적이거나 권장되지 않는 것</h3>
+<ul>
+  <li><strong>Vision Transformer (ViT)</strong>: 대규모 사전학습 없이 작은 데이터셋(60K 샘플)으로 ViT를 학습하면 동일 파라미터의 CNN보다 잘 나오기 어렵습니다. MNIST에서 ViT가 의미 있게 우위를 가진 결과는 보고된 적이 없습니다.</li>
+  <li><strong>매우 깊은 ResNet</strong>: 28x28 흑백 이미지에는 과한 capacity로, ResNet-18~50 정도가 한계이며 단순 BN-CNN 대비 명확한 이득은 없습니다.</li>
+</ul>
+
+<h2>4. 정규화 및 학습 기법</h2>
+
+<table>
+<thead>
+<tr><th>기법</th><th>대략적 이득 (베이스라인 위에)</th><th>구현 난이도</th><th>근거 / 비고</th></tr>
+</thead>
+<tbody>
+<tr>
+  <td><strong>Batch Normalization</strong> (모든 Conv/FC)</td>
+  <td>+0.2 ~ +0.5%p, 수렴 안정화</td>
+  <td><span class="difficulty diff-low">낮음</span></td>
+  <td>hwalsuklee 레퍼런스: BN + Dropout(FC3) + augmentation으로 99.61% 달성 <span class="citation">[14]</span></td>
+</tr>
+<tr>
+  <td><strong>Dropout</strong> (FC 또는 마지막 Conv 뒤, p=0.25~0.5)</td>
+  <td>+0.1 ~ +0.3%p</td>
+  <td><span class="difficulty diff-low">낮음</span></td>
+  <td>강한 augmentation과 함께 쓰면 한계 이득이 줄어듦 <span class="citation">[14]</span></td>
+</tr>
+<tr>
+  <td><strong>Label smoothing</strong> (ε=0.05~0.1)</td>
+  <td>+0.05 ~ +0.2%p</td>
+  <td><span class="difficulty diff-low">낮음</span></td>
+  <td>He 외(2019) "Bag of Tricks": 다른 기법과 결합 시 누적 효과 (ResNet-50에서 75.3→79.29% 등) <span class="citation">[9]</span></td>
+</tr>
+<tr>
+  <td><strong>Cosine LR + Warm Restarts (SGDR)</strong></td>
+  <td>+0.1 ~ +0.3%p, 수렴 가속</td>
+  <td><span class="difficulty diff-low">낮음</span></td>
+  <td>Loshchilov & Hutter (2017). <code>torch.optim.lr_scheduler.CosineAnnealingWarmRestarts</code> <span class="citation">[10]</span></td>
+</tr>
+<tr>
+  <td><strong>Optimizer 선택</strong>: SGD + Nesterov momentum (0.9) + weight decay (5e-4)</td>
+  <td>일반화 측면에서 Adam 대비 +0.05 ~ +0.2%p</td>
+  <td><span class="difficulty diff-low">낮음</span></td>
+  <td>MNIST 분류에서는 SGD+momentum이 최종 정확도에서 약간 더 좋은 경향. Adam은 수렴은 빠르나 일반화 약간 손해</td>
+</tr>
+<tr>
+  <td>Knowledge distillation</td>
+  <td>+0.05 ~ +0.15%p</td>
+  <td><span class="difficulty diff-mid">중간</span></td>
+  <td>Bag of Tricks 조합에 포함됨 <span class="citation">[9]</span></td>
+</tr>
+<tr>
+  <td>Weight decay / L2</td>
+  <td>+0.05 ~ +0.1%p</td>
+  <td><span class="difficulty diff-low">낮음</span></td>
+  <td>5e-4 ~ 1e-3 범위 권장</td>
+</tr>
+</tbody>
+</table>
+
+<blockquote>
+"Bag of Tricks for Image Classification"에서 label smoothing + cosine LR + mixup + knowledge distillation을 모두 결합하면 ResNet-50의 ImageNet top-1 정확도가 75.3% → 79.29%로 약 4%p 향상되었습니다. <span class="citation">[9]</span> MNIST에서는 절대 이득은 더 작지만(이미 99% 부근), 누적 효과로 99.5% → 99.7~99.8% 진입에 충분합니다.
+</blockquote>
+
+<h2>5. 앙상블 (Ensembling), TTA, Pseudo-labeling</h2>
+
+<h3>5.1 앙상블 — 99.5%→99.8% 진입의 가장 확실한 지렛대</h3>
+<table>
+<thead>
+<tr><th>앙상블 방식</th><th>관찰 결과</th><th>구현 난이도</th><th>출처</th></tr>
+</thead>
+<tbody>
+<tr>
+  <td>5-모델 majority voting</td>
+  <td>단일 99.61% → 앙상블 99.72% (+0.11%p)</td>
+  <td><span class="difficulty diff-low">낮음</span></td>
+  <td>[15]</td>
+</tr>
+<tr>
+  <td>15-모델 평균 앙상블</td>
+  <td>최대 99.79%, 평균 99.745% (100회 실행, σ=0.02) — 추가 모델 ↑ 한계 이득 감소</td>
+  <td><span class="difficulty diff-mid">중간</span> (학습 비용)</td>
+  <td>[16]</td>
+</tr>
+<tr>
+  <td>3-모델 majority vote (이종 커널)</td>
+  <td>99.87% — 동일 아키텍처 3x3/5x5/7x7 커널 다양화</td>
+  <td><span class="difficulty diff-mid">중간</span></td>
+  <td>[2]</td>
+</tr>
+<tr>
+  <td>2-layer 이종 앙상블 (앙상블의 앙상블)</td>
+  <td>99.91% — MNIST 최상위 결과 중 하나</td>
+  <td><span class="difficulty diff-high">높음</span></td>
+  <td>[1]</td>
+</tr>
+<tr>
+  <td>Single Transferable Vote (STV)</td>
+  <td>실험적으로 majority voting과 거의 동일 (99.36% vs 99.35%) — 큰 차이 없음</td>
+  <td><span class="difficulty diff-mid">중간</span></td>
+  <td>[18]</td>
+</tr>
+<tr>
+  <td>Degree-of-certainty 융합 (MNIST-NET10)</td>
+  <td>이종 네트워크 + 데이터 + 융합 전략 모두 다양화 → 99.9% (오류 10개)</td>
+  <td><span class="difficulty diff-high">높음</span></td>
+  <td>[3][4]</td>
+</tr>
+</tbody>
+</table>
+
+<h3>5.2 Test-Time Augmentation (TTA)</h3>
+<p>TTA는 테스트 이미지 각각에 대해 여러 번의 증강(회전, 이동 등) 복사본을 만들고 모델 예측을 평균/투표로 합치는 기법입니다. <span class="citation">[17]</span> MNIST에서는 보통 <strong>+0.05 ~ +0.15%p</strong>의 한계 이득을 얻을 수 있으며, 추가 학습 없이 추론 비용만으로 정확도를 끌어올리는 가장 저렴한 방법 중 하나입니다.</p>
+<ul>
+  <li>구현: 동일 augmentation pipeline을 test 단계에서도 5~20회 적용 → 각 예측 평균</li>
+  <li>난이도: <span class="difficulty diff-low">낮음</span></li>
+  <li>훈련용 증강과 동일한 분포의 변환을 사용하는 것이 핵심</li>
+</ul>
+
+<h3>5.3 Pseudo-labeling</h3>
+<p>MNIST는 라벨이 모두 주어진 supervised 데이터셋이므로 외부 unlabeled 데이터(예: USPS, EMNIST의 digit subset)를 끌어와야 의미가 있습니다. 표준 MNIST 평가에서는 일반적으로 사용하지 않으며, 본 보고서의 범위 밖입니다.</p>
+
+<h2>6. 권장 로드맵 (사용자 베이스라인 ~99% 기준)</h2>
+
+<div class="recipe">
+<h3>1단계: 99% → 99.5%+ (낮은 난이도, 즉시 적용)</h3>
+<ol>
+  <li>모든 Conv/FC 레이어 뒤 <strong>Batch Normalization</strong> 추가 <span class="citation">[14]</span></li>
+  <li><strong>RandomAffine(rotation=±10~15°, translate=±2px, scale=0.9~1.1)</strong> 적용 <span class="citation">[14]</span></li>
+  <li>FC 직전 <strong>Dropout(p=0.5)</strong> <span class="citation">[14]</span></li>
+  <li>Optimizer: <strong>SGD(lr=0.01, momentum=0.9, nesterov=True, weight_decay=5e-4)</strong></li>
+  <li>스케줄: <strong>CosineAnnealingWarmRestarts(T_0=10)</strong>, 80~100 epoch <span class="citation">[10]</span></li>
+  <li>예상 결과: <strong>99.5 ~ 99.65%</strong></li>
+</ol>
+</div>
+
+<div class="recipe">
+<h3>2단계: 99.5% → 99.75% (중간 난이도)</h3>
+<ol>
+  <li>위에 <strong>Elastic distortion</strong> 추가 (alpha=8, sigma=3 부근) <span class="citation">[11][13]</span></li>
+  <li><strong>Label smoothing (ε=0.1)</strong> <span class="citation">[9]</span></li>
+  <li>매 epoch마다 distortion 새로 샘플링 <span class="citation">[13]</span></li>
+  <li>TTA 5~10회 (rotation/shift 변형) <span class="citation">[17]</span></li>
+  <li>예상 결과: <strong>99.70 ~ 99.80%</strong></li>
+</ol>
+</div>
+
+<div class="recipe">
+<h3>3단계: 99.75% → 99.85%+ (높은 난이도, SOTA 영역)</h3>
+<ol>
+  <li>커널 크기를 다르게 한 단순 CNN 3~5개 학습 (3x3 / 5x5 / 7x7) <span class="citation">[1][2]</span></li>
+  <li><strong>Majority voting</strong> 또는 confidence-weighted ensemble <span class="citation">[1][2][15][16]</span></li>
+  <li>(선택) Branching/Merging + Homogeneous Vector Capsules 도입 <span class="citation">[5][6][12]</span></li>
+  <li>(선택) 2-layer 이종 앙상블로 모델군 자체를 앙상블 <span class="citation">[1]</span></li>
+  <li>예상 결과: <strong>99.83 ~ 99.91%</strong> (현재 공개 SOTA 영역)</li>
+</ol>
+</div>
+
+<h2>7. 한계 및 주의사항 (Caveats)</h2>
+<ul>
+  <li><strong>99.8% 이상에서는 통계적 잡음과 실질 개선이 거의 구분 불가능</strong>합니다. 15-모델 앙상블 100회 실행 결과의 표준편차가 0.02%p에 불과합니다. <span class="citation">[16]</span> 단일 run으로 99.81%가 나와도 다음 run에서 99.70%일 수 있습니다.</li>
+  <li><strong>테스트셋 누설(leakage)에 주의</strong>: 어떤 augmentation/하이퍼파라미터도 validation/test에서 직접 튜닝하지 마세요. MNIST 테스트셋은 10,000개에 불과해 작은 차이가 과적합되기 쉽습니다.</li>
+  <li><strong>인간 오류율(~0.2%)이 사실상 상한</strong>이며, 0.1% 이하는 사람조차 일관되게 정답을 매기기 힘든 모호한 글자들이 포함되어 있습니다. <span class="citation">[11]</span></li>
+  <li>STV 같은 정교한 투표 알고리즘은 majority voting 대비 의미 있는 이득을 보여주지 못했습니다(99.36% vs 99.35%). <span class="citation">[18]</span> 단순 다수결로 충분합니다.</li>
+  <li>새 시도가 더 좋은지 평가하려면 <strong>여러 random seed로 반복 실행 후 평균 ± 표준편차로 비교</strong>해야 합니다. <span class="citation">[16]</span></li>
+</ul>
+
+<h2>8. 남은 질문 (Open Questions)</h2>
+<ul>
+  <li>현대 ViT 변형(Swin, DeiT, ConvNeXt 등)을 MNIST에서 처음부터 학습했을 때 99.8%+에 도달한 공개 결과는 거의 없으며, 정량적 비교 데이터가 부족합니다.</li>
+  <li>EMNIST나 USPS 같은 외부 데이터를 활용한 semi-supervised / pseudo-labeling으로 MNIST에서 99.91%를 넘은 사례는 본 조사 범위에서 확인되지 않았습니다.</li>
+  <li>HVC 캡슐 + 강한 distillation의 조합이 99.91%를 넘을 수 있는지에 대한 결정적 결과는 아직 공개되지 않았습니다.</li>
+</ul>
+
+<div class="sources">
+<h2 style="margin-top:0;">출처 목록</h2>
+<ol>
+  <li>[1][2] An, S., Lee, M., Park, S., Yang, H., So, J. (2020). <em>An Ensemble of Simple Convolutional Neural Network Models for MNIST Digit Recognition.</em> arXiv:2008.10400. <a href="https://arxiv.org/abs/2008.10400">https://arxiv.org/abs/2008.10400</a></li>
+  <li>[3][4] Tabik, S., Alvear-Sandoval, R.F., Ruiz, M.M., Sancho-Gomez, J.L., Figueiras-Vidal, A.R., Herrera, F. (2020). <em>MNIST-NET10: A heterogeneous deep networks fusion based on the degree of certainty to reach 0.1% error rate.</em> Information Fusion (Elsevier). arXiv:2001.11486. <a href="https://arxiv.org/abs/2001.11486">https://arxiv.org/abs/2001.11486</a></li>
+  <li>[5][6][12] Byerly, A., Kalganova, T., Dear, I. (2020). <em>No Routing Needed Between Capsules / A Branching and Merging Convolutional Network with Homogeneous Filter Capsules.</em> Neurocomputing. arXiv:2001.09136. <a href="https://arxiv.org/abs/2001.09136">https://arxiv.org/abs/2001.09136</a></li>
+  <li>[7][8] Zhao, Z. et al. (2019). <em>Capsule Networks with Max-Min Normalization.</em> arXiv:1903.09662. <a href="https://arxiv.org/abs/1903.09662">https://arxiv.org/abs/1903.09662</a></li>
+  <li>[9] He, T., Zhang, Z., Zhang, H., Zhang, Z., Xie, J., Li, M. (2019). <em>Bag of Tricks for Image Classification with Convolutional Neural Networks.</em> CVPR 2019. arXiv:1812.01187. <a href="https://arxiv.org/abs/1812.01187">https://arxiv.org/abs/1812.01187</a></li>
+  <li>[10] Loshchilov, I., Hutter, F. (2017). <em>SGDR: Stochastic Gradient Descent with Warm Restarts.</em> ICLR 2017. arXiv:1608.03983. <a href="https://arxiv.org/abs/1608.03983">https://arxiv.org/abs/1608.03983</a></li>
+  <li>[11][13] Cireşan, D., Meier, U., Schmidhuber, J. (2012). <em>Multi-column Deep Neural Networks for Image Classification.</em> CVPR 2012. arXiv:1202.2745. <a href="https://arxiv.org/abs/1202.2745">https://arxiv.org/abs/1202.2745</a> · 요약 블로그: <a href="https://medium.com/@parth.kulkarni20/mnist-dataset-as-a-benchmark-for-neural-networks-c7074deba19f">medium.com/@parth.kulkarni20/mnist-dataset-as-a-benchmark</a></li>
+  <li>[14][15] hwalsuklee. <em>tensorflow-mnist-cnn.</em> GitHub. <a href="https://github.com/hwalsuklee/tensorflow-mnist-cnn">https://github.com/hwalsuklee/tensorflow-mnist-cnn</a></li>
+  <li>[16] Deotte, C. <em>MNIST-CNN-99.75.</em> GitHub. <a href="https://github.com/cdeotte/MNIST-CNN-99.75">https://github.com/cdeotte/MNIST-CNN-99.75</a></li>
+  <li>[17] Brownlee, J. <em>How to Use Test-Time Augmentation to Improve Model Performance for Image Classification.</em> Machine Learning Mastery. <a href="https://machinelearningmastery.com/how-to-use-test-time-augmentation-to-improve-model-performance-for-image-classification/">machinelearningmastery.com</a></li>
+  <li>[18] So, C. <em>The Power of Ensemble Learning and Data Augmentation.</em> Towards Data Science. <a href="https://medium.com/data-science/the-power-of-ensemble-learning-and-data-augmentation-435c62e13c57">medium.com/data-science</a></li>
+</ol>
+</div>
+
+</body>
+</html>
